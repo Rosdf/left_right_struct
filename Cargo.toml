@@ -10,8 +10,6 @@ categories = ["Concurrency"]
 edition = "2021"
 rust-version = "1.72"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 arc-swap = "1.6.0"
-triomphe = {version = "0.1.9", features = ["arc-swap"]}
+triomphe = {version = "0.1.9", features = ["arc-swap"], default-features = false}

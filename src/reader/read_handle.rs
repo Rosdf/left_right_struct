@@ -5,6 +5,8 @@ use std::marker::PhantomData;
 use std::process::abort;
 use triomphe::Arc;
 
+/// Provides interface for reading inner data.
+#[derive(Debug)]
 pub struct ReadHandle<T> {
     inner: Arc<ReadHandleInner<T>>,
     ref_counter: Cell<usize>,
@@ -50,6 +52,7 @@ impl<T> ReadHandle<T> {
         }
     }
 
+    /// Returns guard for accessing inner data.
     pub fn reference(&self) -> Guard<T, impl Fn() + '_> {
         let refs = self.ref_counter.get();
 

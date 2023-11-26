@@ -2,10 +2,11 @@ use crate::reader::ReadHandleInner;
 use std::cell::Cell;
 use std::ops::Deref;
 
+/// Guard class for managing reference to inner data
+#[derive(Debug)]
 pub struct Guard<'a, T, U: Fn() + 'a> {
     inner: &'a T,
     drop_callback: U,
-    ref_counter: &'a Cell<usize>,
 }
 
 /// # Safety
@@ -18,18 +19,19 @@ pub(crate) unsafe fn new_guard<'a, T>(
         // SAFETY:
         // provided by caller
         inner: unsafe { read_handel_inner.load_pointer() },
-        drop_callback: || read_handel_inner.increase_counter(),
-        ref_counter,
+        drop_callback: || {
+            let refs = ref_counter.get() - 1;
+            ref_counter.set(refs);
+            if refs == 0 {
+                read_handel_inner.increase_counter();
+            }
+        },
     }
 }
 
 impl<'a, T, U: Fn()> Drop for Guard<'a, T, U> {
     fn drop(&mut self) {
-        let refs = self.ref_counter.get() - 1;
-        self.ref_counter.set(refs);
-        if refs == 0 {
-            (self.drop_callback)();
-        }
+        (self.drop_callback)();
     }
 }
 

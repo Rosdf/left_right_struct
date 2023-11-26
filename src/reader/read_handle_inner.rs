@@ -4,6 +4,7 @@ use std::ptr;
 use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering};
 use triomphe::Arc;
 
+#[derive(Debug)]
 pub(crate) struct ReadHandleInner<T> {
     reader_pointer: AtomicPtr<T>,
     epoch_counter: AtomicUsize,
@@ -15,7 +16,7 @@ pub(crate) struct ReadHandleInner<T> {
 impl<T> ReadHandleInner<T> {
     const MAX_REFCOUNT: usize = isize::MAX as usize;
 
-    /// #Safety
+    /// # Safety
     /// there should be no writers to pointer at creation
     pub(crate) unsafe fn new(
         reader_pointer: *mut T,
@@ -54,7 +55,7 @@ impl<T> ReadHandleInner<T> {
     pub(crate) fn clone_as_ptr(&self) -> Arc<Self> {
         let mut old_next = self.next.load();
         let current_reader = ptr::null_mut();
-        let old_count = self.reader_counter.fetch_add(1, Ordering::AcqRel);
+        let old_count = self.reader_counter.fetch_add(1, Ordering::Relaxed);
 
         if old_count > Self::MAX_REFCOUNT {
             abort();
@@ -105,15 +106,15 @@ impl<T> ReadHandleInner<T> {
 
 impl<T> Drop for ReadHandleInner<T> {
     fn drop(&mut self) {
-        if self
-            .reader_counter
-            .compare_exchange(1, 0, Ordering::AcqRel, Ordering::Relaxed)
-            .is_ok()
-        {
-            // SAFETY:
-            // we checked that we are the only holder of reade handle
-            // and no more can be created because we are holding mutable reference to self
-            drop(unsafe { Box::from_raw(self.reader_pointer.load(Ordering::Acquire)) });
+        if self.reader_counter.fetch_sub(1, Ordering::Release) != 1 {
+            return;
         }
+
+        self.reader_counter.load(Ordering::Acquire);
+
+        // SAFETY:
+        // we checked that we are the only holder of reade handle
+        // and no more can be created because we are holding mutable reference to self
+        drop(unsafe { Box::from_raw(self.reader_pointer.load(Ordering::Acquire)) });
     }
 }

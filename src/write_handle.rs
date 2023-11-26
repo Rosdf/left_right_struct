@@ -6,6 +6,8 @@ use std::ptr::NonNull;
 use std::{hint, mem};
 use triomphe::Arc;
 
+/// Handle for mutating inner data.
+#[derive(Debug)]
 pub struct WriteHandle<T: Mutator> {
     writer_pointer: NonNull<T>,
     reader_pointer: NonNull<T>,
@@ -33,6 +35,7 @@ impl<T: Mutator> WriteHandle<T> {
         }
     }
 
+    /// Method for mutating inner value.
     pub fn mutate(&mut self, operation: T::Operation) {
         // SAFETY:
         // only we have access to this pointer so it is safe to write to it
@@ -41,6 +44,8 @@ impl<T: Mutator> WriteHandle<T> {
         self.operations_log.push(operation);
     }
 
+    /// Method for publishing updates to read handles. It is quite heavy on atomic operations, and might block
+    /// for some time, if there are active reads.
     pub fn publish(&mut self) {
         if self.read_handle_inner.is_none() {
             return;
@@ -140,7 +145,7 @@ impl<T: Mutator> WriteHandle<T> {
         let mut current_reader_ptr = self.clone_read_handle();
 
         while let Some(current_reader) = current_reader_ptr {
-            if !current_reader.is_active() {
+            if current_reader.is_active() {
                 current_reader_ptr = Some(current_reader);
                 break;
             }
@@ -157,5 +162,14 @@ impl<T: Mutator> Drop for WriteHandle<T> {
         // SAFETY:
         // only we have access to this pointer so it is safe to drop it
         drop(unsafe { Box::from_raw(self.writer_pointer.as_ptr()) });
+    }
+}
+
+impl<T: Mutator> AsRef<T> for WriteHandle<T> {
+    fn as_ref(&self) -> &T {
+        // SAFETY:
+        // only we have access to this pointer and we can not initiate publish
+        // because it requires mut reference
+        unsafe { self.writer_pointer.as_ref() }
     }
 }

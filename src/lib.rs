@@ -34,19 +34,46 @@
 //!
 //! fn mutate_log(operation: &Self::Operation, operations_log: &mut Vec<Self::Operation>) {}
 //! }
+//! ```
 //!
-//! let (rh, mut wh) = create_handles_from_clone(MyStruct("".into()));
+//! Or if you just want to implement it with Operation = Box<dyn Fn(&mut Self)>
 //!
-//! assert_eq!(rh.reference().0.as_str(), "");
+//! ```rust
+//! use left_right_struct::{create_handles_from_clone, impl_simple_mutator};
+//!
+//! #[derive(Clone, PartialEq, Eq, Debug, Default)]
+//! struct MyStruct(String);
+//!
+//! impl_simple_mutator!(MyStruct);
+//! ```
+//!
+//! Than you can use it this way.
+//!
+//! ```rust
+//! use std::thread;
+//! use left_right_struct::{create_handles_from_clone, create_handles_from_default, impl_simple_mutator};
+//!
+//! #[derive(Clone, PartialEq, Eq, Debug, Default)]
+//! struct MyStruct(String);
+//!
+//! impl_simple_mutator!(MyStruct);
+//!
+//! let (rh, mut wh) = create_handles_from_default::<MyStruct>();
+//!
+//! thread::spawn(move || {
+//!     let guard = rh.reference();
+//!     let ref_str = guard.0.as_str();
+//!     println!("{}", ref_str);
+//!     // inner str will be "" if we got reference before wh.publish()
+//!     // or "1" if after
+//!     assert!(ref_str == "" || ref_str == "1");
+//! });
 //!
 //! wh.mutate(Box::new(|s| s.0.push('1')));
 //!
+//! // in WriteHandle we see changes immediately
 //! assert_eq!(wh.as_ref().0.as_str(), "1");
-//! assert_eq!(rh.reference().0.as_str(), "");
-//!
 //! wh.publish();
-//!
-//! assert_eq!(rh.reference().0.as_str(), "1");
 //! ```
 
 mod mutator;
@@ -108,7 +135,7 @@ pub fn create_handles_from_default<T: Default + Mutator>() -> (ReadHandle<T>, Wr
 #[macro_export(local_inner_macros)]
 macro_rules! impl_simple_mutator {
     ($TypeName:ty) => {
-        impl Mutator for $TypeName {
+        impl $crate::Mutator for $TypeName {
             type Operation = Box<dyn Fn(&mut Self)>;
 
             fn apply_operation(&mut self, operation: &Self::Operation) {
@@ -122,7 +149,7 @@ macro_rules! impl_simple_mutator {
 
 #[cfg(test)]
 mod test {
-    use crate::{create_handles_from_default, Mutator};
+    use crate::create_handles_from_default;
 
     impl_simple_mutator!(String);
 
